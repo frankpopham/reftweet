@@ -1,0 +1,151 @@
+---
+title: "We are better than you? REF edition"
+author:
+  - name: Frank Popham
+date: 2022-05-12
+output:
+  distill::distill_article:
+    self_contained: false
+---
+
+The [research excellence framework](https://www.ref.ac.uk/) represents another opportunity for universities in the UK to boast they are better than their peers. [In this article](https://www.timeshighereducation.com/campus/dont-let-ref-tail-wag-academic-dog) Marcus Manufò highlighted how Glasgow had pre-registered that they
+
+> will focus on collegiality over superiority, avoiding unnecessary comparisons and presenting the results
+> as evidence of Glasgow's significant contribution to the collaborative research endeavour.
+
+As a first check I scraped every REF result related tweet from the main account of [Russell Group universities](https://www.russellgroup.ac.uk/) on the 12th May 2022 up to midday. These are 24 "leading" universities. They are republished below by university. I have tried to exclude non-relevant tweets and also retweets. Exeter and Nottingham's accounts had not tweeted anything about REF results by noon.
+
+Make your own mind up about how Glasgow compares in its tweets to the others. I thought there was less comparison than I was expecting.
+
+The code to reproduce the analysis is [here](https://github.com/frankpopham/reftweet). Thanks to [R](https://www.r-project.org/), [Rstudio](https://www.rstudio.com/), [tidyverse](https://www.tidyverse.org/), [rtweet](https://docs.ropensci.org/rtweet/), [tweetrmd](https://github.com/gadenbuie/tweetrmd) for making this easy to do and [distill](https://rstudio.github.io/distill/) for making the blog easy to produce.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(lubridate)
+library(rvest)
+library(rtweet)
+library(tweetrmd)
+
+#get list of russell group unis
+
+rus_web <-read_html("https://russellgroup.ac.uk/about/our-universities/")
+rus_web2 <- rus_web %>%
+  html_elements(".header_our_uni_dropdown") %>%
+  pluck(1) %>%
+  html_elements("a") 
+
+rus_web_df <- 
+  tibble(name=rus_web2 %>% html_text2(),
+         url=rus_web2 %>% html_attr("href")) %>%
+  mutate(url=paste0("https://russellgroup.ac.uk", url))
+
+#get uni website
+
+rus_web3<-rus_web_df$url %>%
+  map(read_html) %>%
+  map(~html_elements(.x, ".uni_box")) %>%
+  map(~html_elements(.x, "a")) %>%
+  map(~pluck(.x, 1)) 
+
+
+rus_web_df <- rus_web_df %>%
+  mutate(url2=rus_web3 %>% map(~html_attr(.x, "href"))) %>%
+  mutate(url2=str_replace(url2, "http", "https")) %>%
+  mutate(url2=str_replace(url2, "httpss", "https"))
+
+#having problems with warwick not returning data so exclude
+  
+rus_web4 <- rus_web_df %>%
+  filter(name!="University of Warwick") 
+
+#get uni pages, could do analysis of these
+
+rus_web5 <- rus_web4$url2 %>%
+  map(read_html)  
+
+names(rus_web5) <- rus_web4$name
+
+#tweets 
+#get twitter handles
+
+
+rus_web6 <- as.list(rus_web_df$name)
+names(rus_web6) <- rus_web_df$name
+
+rus_tweet <- rus_web6 %>%
+  map_dfr(~search_users(.x, n=1)) %>%
+  mutate(screen_name=if_else(screen_name=="UoNSU", "UniofNottingham", screen_name))
+
+#get latest tweets
+
+rus_web7 <- as.list(rus_tweet$screen_name)
+names(rus_web7) <- rus_web_df$name
+
+rus_tweet2 <- rus_web7 %>%
+  map_dfr(~get_timeline(.x, n=20))
+
+#keep tweets from 12th May (Ref results day) - I looked at tweets b4 midday
+
+rus_tweet2 <- rus_tweet2 %>%
+  mutate(tday=date(created_at)) %>%
+  filter(tday=="2022-05-12") %>%
+  mutate(thour=hour(created_at)) %>%
+  filter(thour < 12) %>%
+  filter(is_retweet==FALSE) %>%
+  filter(status_id!="1524671472408698883" &
+         status_id!="1524671470139547648" &
+         status_id!="1524671474841313281" &
+         status_id!="1524671480482643969" &
+         status_id!="1524671483729092611" &
+         status_id!="1524671486468014080" &
+         status_id!="1524706090671382532" &   
+         status_id!="1524665887189614593" &
+         status_id!="1524656070660083712" &
+         status_id!="1524666211363086337" &  
+         status_id!="1524669039024484352" &
+         status_id!="1524697938420715520" &
+         status_id!="1524677693421330432" &
+         status_id!="1524678159400148993" &
+         status_id!="1524678477856788481" &   
+         status_id!="1524648999608889347" &
+         status_id!="1524689806931939329" &
+         status_id!="1524704190555213825" &   
+         status_id!="1524687578380832769" &
+         status_id!="1524711994493964289" & 
+         status_id!="1524691100010790914" &
+         status_id!="1524703962854789123" &
+         status_id!="1524696384724783105" &
+         status_id!="1524692577789829121" &  
+         status_id!="1524660919820767233" & 
+         status_id!="1524687578380832769" & 
+         status_id!="1524697938420715520" &
+         status_id!="1524711994493964289" &
+         status_id!="1524713507480088576" &
+         status_id!="1524717357276569600" &
+         status_id!="1524717365191135238" &
+         status_id!="1524717371004436481" &  
+         status_id!="1524717377790910464" &  
+         status_id!="1524717380944936960" & 
+         status_id!="1524717357276569600") %>%
+  group_by(screen_name) %>%
+  arrange(created_at, .by_group=TRUE)
+
+ 
+```
+
+```{r tweets}
+
+
+
+htmltools::tagList(
+  map(rus_tweet2$status_url, ~tweet_embed(.x, plain=TRUE))
+)
+
+
+
+
+
+
+
+```
